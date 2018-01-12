@@ -152,7 +152,11 @@ public class SnakeEntity {
         return state;
     }
 
-
+    // 生长一节
+    public void grow(){
+        this.state = State.grow;
+        logger.info(" id:{} name:{}", accountId, gameName);
+    }
     public void die() {
         int bodySize = bodys.size();
         for (int i = 0; i < bodySize; i++) {

@@ -32,6 +32,8 @@ public class SnakeGameEngine {
     private volatile LinkedList<MapVersion> historyVersionData = new LinkedList();
     private MapVersion currentMapData = new MapVersion(-1, -1, null);
     private static final int historyVersionMax = 20;
+    private ArrayList<Food> foods = new ArrayList<>();
+    private int footMaxSize = 10;
 
     public SnakeGameEngine() {
         mapWidth = 400;
@@ -59,6 +61,7 @@ public class SnakeGameEngine {
             }
         }, refreshTime, refreshTime, TimeUnit.MILLISECONDS);
     }
+
     //animate
     public void gameTimeStep() {
         try {
@@ -95,41 +98,47 @@ public class SnakeGameEngine {
         }
 
         // 当前版本 新增的节点
-        ArrayList<Integer[]> addPoints = new ArrayList<>();
-        // 当前版本 删除的节点
-        ArrayList<Integer[]> removePoints = new ArrayList<>();
+        ArrayList<Integer[]> changeNodes = new ArrayList<>();
 
 
         /**
          * 执行触发的游戏规则
          */
         for (SnakeEntity snake : snakeNodes.values()) {
-
             for (Integer[] node : snake.getAddNodes()) {
                 //断定是否撞击蛇身
                 if (getMark(node).snakeNodes > 1) {
                     snake.dying();
-                }
-                // 撞击边界
-                else if (node[0] <= 0 || node[0] >= mapHeight - 1
+                } else if (node[0] <= 0 || node[0] >= mapHeight - 1 // 撞击边界
                         || node[1] <= 0 || node[1] >= mapWidth - 1) {
                     snake.dying();
+                } else if (getMark(node).footNode > 0) { //吃掉食物
+                    digestionFood(node); // 消化食物
+                    snake.grow();// 指定角色为增长状态
+//                    changeNodes.add(node);
                 }
             }
-            removePoints.addAll(snake.getRemoveNodes());
-            addPoints.addAll(snake.getAddNodes());
+
+            changeNodes.addAll(snake.getAddNodes());
+            changeNodes.addAll(snake.getRemoveNodes());
         }
 
+
+        // 投放规定量食物
+        while (foods.size() < footMaxSize) {
+            Food food = grantFood();
+            changeNodes.add(food.point);
+        }
+
+
         // 如果变更不为空，则创建新的版本号
-        if (!(addPoints.isEmpty() && removePoints.isEmpty())) {
+        if (!changeNodes.isEmpty()) {
             /**
              * 编码新版本数据
              */
             long newVersion = currentVersion + 1;
 
-
-
-            String versionData = encodeVersion(newVersion, addPoints, removePoints);
+            String versionData = encodeVersion(newVersion, changeNodes);
 
             /**
              * 版本归档存储
@@ -167,9 +176,9 @@ public class SnakeGameEngine {
         }
     }
 
-    public void grantFeed() {
+    public Food grantFood() {
         // 随机生成的投放点
-        int releasePoint=-1;
+        int releasePoint = -1;
 
         Random random = new Random();
         int start = random.nextInt(mapHeight * mapHeight - 5) + 4;
@@ -192,8 +201,29 @@ public class SnakeGameEngine {
                 i = 0;
             }
         }
+        Integer[] point = new Integer[]{releasePoint / mapWidth, releasePoint % mapWidth};
+        Food food = new Food(point, 1);
+        foods.add(food);
+        return food;
+    }
 
-        getMark(releasePoint).footNode++;
+
+    private Food digestionFood(Integer[] point) {
+        Food food = null;
+        for (Food f : foods) {
+            if (Arrays.equals(f.point, point)) {
+                food = f;
+                break;
+            }
+        }
+        if (food == null) {
+            throw new RuntimeException(
+                    String.format("消化食物异常，坐标上不存在指定食物x:%s,y:%s", point[1], point[00]));
+        }
+
+        foods.remove(food);
+        getMark(point).footNode = 0;
+        return food;
     }
 
 
@@ -246,7 +276,8 @@ public class SnakeGameEngine {
         int index = point[0] * mapWidth + point[1];
         return getMark(index);
     }
-    private Mark getMark(int index){
+
+    private Mark getMark(int index) {
         if (mapsMarks[index] == null) {
             mapsMarks[index] = new Mark();
         }
@@ -283,19 +314,34 @@ public class SnakeGameEngine {
     }
 
     // 构建当前版本地图像素的变更
-    private String encodeVersion(long version, ArrayList<Integer[]> addPoints,
-                                 ArrayList<Integer[]> removePoints) {
-        StringBuilder sb = new StringBuilder();
-        sb.append(currentVersion);
-        if (!addPoints.isEmpty()) {
-            sb.append("\r\n");
-            sb.append(encodeLine("Lime", addPoints));
+    private String encodeVersion(long version, ArrayList<Integer[]> changePoints) {
+        StringBuilder result = new StringBuilder();
+        result.append(currentVersion);
+
+        StringBuilder body = new StringBuilder();
+        body.append("Lime");
+        StringBuilder food = new StringBuilder();
+        food.append("Yellow");
+        StringBuilder remove = new StringBuilder();
+        food.append("Black");
+        Mark mark;
+        for (Integer[] p : changePoints) {
+            mark=  getMark(p);
+            if (mark == null || mark.isEmpty()) {
+                remove.append("," + p[1] + "," + p[0]);
+            } else if (mark.snakeNodes > 0) {
+                body.append("," + p[1] + "," + p[0]);
+            } else if (mark.footNode > 0) {
+                food.append("," + p[1] + "," + p[0]);
+            }
         }
-        if (!removePoints.isEmpty()) {
-            sb.append("\r\n");
-            sb.append(encodeLine("Black", removePoints));
-        }
-        return sb.toString();
+        result.append(body);
+        result.append("\r\n");
+        result.append(food);
+        result.append("\r\n");
+        result.append(remove);
+
+        return result.toString();
     }
 
     private String encodeLine(String color, ArrayList<Integer[]> points) {
@@ -344,7 +390,7 @@ public class SnakeGameEngine {
     // 地图标记位
     static class Mark {
         public int snakeNodes = 0;
-        public int footNode = 0;
+        public int footNode = 0;//1,2,3,4,5
 
         private boolean isEmpty() {
             return snakeNodes <= 0 && footNode <= 0;
@@ -373,6 +419,17 @@ public class SnakeGameEngine {
 
         public String getData() {
             return data;
+        }
+    }
+
+    private static class Food {
+        // 当前位位置
+        private Integer[] point;
+        private int type;
+
+        public Food(Integer[] point, int type) {
+            this.point = point;
+            this.type = type;
         }
     }
 
