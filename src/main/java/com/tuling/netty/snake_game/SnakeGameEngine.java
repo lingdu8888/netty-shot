@@ -59,12 +59,12 @@ public class SnakeGameEngine {
             }
         }, refreshTime, refreshTime, TimeUnit.MILLISECONDS);
     }
-
+    //animate
     public void gameTimeStep() {
         try {
             build();
         } catch (Throwable e) {
-            e.printStackTrace();
+            logger.error("地图构建异常", e);
         } finally {
             afterBuild();
         }
@@ -72,7 +72,7 @@ public class SnakeGameEngine {
 
     private void build() {
         /**
-         * 执行移动算法
+         * 基于状态执行算法
          */
         for (SnakeEntity snake : snakeNodes.values()) {
             switch (snake.getState()) {
@@ -111,8 +111,8 @@ public class SnakeGameEngine {
                     snake.dying();
                 }
                 // 撞击边界
-                else if (node[0] <= 0 || node[0] >= mapHeight-1
-                        || node[1] <= 0 || node[1] >= mapWidth-1) {
+                else if (node[0] <= 0 || node[0] >= mapHeight - 1
+                        || node[1] <= 0 || node[1] >= mapWidth - 1) {
                     snake.dying();
                 }
             }
@@ -126,6 +126,9 @@ public class SnakeGameEngine {
              * 编码新版本数据
              */
             long newVersion = currentVersion + 1;
+
+
+
             String versionData = encodeVersion(newVersion, addPoints, removePoints);
 
             /**
@@ -162,6 +165,35 @@ public class SnakeGameEngine {
         for (SnakeEntity snake : snakeNodes.values()) {
             snake.flush();
         }
+    }
+
+    public void grantFeed() {
+        // 随机生成的投放点
+        int releasePoint=-1;
+
+        Random random = new Random();
+        int start = random.nextInt(mapHeight * mapHeight - 5) + 4;
+        int nextCount = random.nextInt(50);
+
+        // i 查找开始位置
+        // n 从开始位置起的第 n个空位,如果所有空位没有n个，则往后减
+        // m 遍历的最大值,防止无限循环
+        for (int i = start, n = 0, m = 0; i < mapsMarks.length
+                && m < mapsMarks.length; i++, m++) {
+            if (mapsMarks[i] == null || mapsMarks[i].isEmpty()) {
+                n++;
+                releasePoint = i;
+                if (n >= nextCount) {
+                    break;
+                }
+            }
+            // 重新从0开始遍历
+            if (i == mapsMarks.length - 1) {
+                i = 0;
+            }
+        }
+
+        getMark(releasePoint).footNode++;
     }
 
 
@@ -212,6 +244,9 @@ public class SnakeGameEngine {
 
     public Mark getMark(Integer[] point) {
         int index = point[0] * mapWidth + point[1];
+        return getMark(index);
+    }
+    private Mark getMark(int index){
         if (mapsMarks[index] == null) {
             mapsMarks[index] = new Mark();
         }
@@ -263,10 +298,6 @@ public class SnakeGameEngine {
         return sb.toString();
     }
 
-    public void setListener(SnakeGameListener listener) {
-        this.listener = listener;
-    }
-
     private String encodeLine(String color, ArrayList<Integer[]> points) {
         StringBuilder sb = new StringBuilder();
         sb.append(color + ",");
@@ -280,10 +311,6 @@ public class SnakeGameEngine {
         return sb.toString();
     }
 
-
-    public Long getCurrentVersion() {
-        return currentVersion;
-    }
 
     public MapVersion getCurrentMapData(boolean check) {
         if (check && currentMapData.version < currentVersion) {
@@ -306,11 +333,22 @@ public class SnakeGameEngine {
         return list;
     }
 
+    public void setListener(SnakeGameListener listener) {
+        this.listener = listener;
+    }
+
+    public Long getCurrentVersion() {
+        return currentVersion;
+    }
+
     // 地图标记位
     static class Mark {
         public int snakeNodes = 0;
         public int footNode = 0;
 
+        private boolean isEmpty() {
+            return snakeNodes <= 0 && footNode <= 0;
+        }
     }
 
     // 地图版本信息
