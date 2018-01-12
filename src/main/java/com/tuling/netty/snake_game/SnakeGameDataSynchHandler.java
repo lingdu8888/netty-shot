@@ -1,0 +1,85 @@
+package com.tuling.netty.snake_game;
+
+
+import io.netty.channel.Channel;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.SimpleChannelInboundHandler;
+import io.netty.channel.group.ChannelGroup;
+import io.netty.handler.codec.http.websocketx.TextWebSocketFrame;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+/**
+ * 处理TextWebSocketFrame
+ */
+public class SnakeGameDataSynchHandler extends
+        SimpleChannelInboundHandler<TextWebSocketFrame> {
+    static final Logger logger = LoggerFactory.getLogger(SnakeGameEngine.class);
+
+    private final ChannelGroup channels ;
+    private final SnakeGameEngine gameEngine;
+    public SnakeGameDataSynchHandler(SnakeGameEngine gameEngine,ChannelGroup channels) {
+        this.channels=channels;
+        this.gameEngine=gameEngine;
+    }
+
+    @Override
+    protected void channelRead0(ChannelHandlerContext ctx,
+                                TextWebSocketFrame msg) throws Exception { // (1)
+        Channel incoming = ctx.channel();
+        logger.debug("接收数据  地址:{},id:{},文本:{}", incoming.remoteAddress(), incoming.id().asShortText(), msg.text());
+
+        String cmdText = msg.text().trim();
+        int splitTindex;
+        if ((splitTindex = cmdText.indexOf(":")) < 0) {
+            logger.error("异常指令:{}", cmdText);
+            return;
+        }
+        String cmd = cmdText.substring(0, splitTindex);
+        String cmdData = cmdText.substring(splitTindex + 1);
+
+        if (cmd.equals("JOIN")) {
+            gameEngine.newSnake(incoming.id().asShortText(), cmdData);
+            // TODO 需要发送一次全量更新
+        } else if (cmd.equals("CONTROL")) {
+            gameEngine.controlSnake(incoming.id().asShortText(), Integer.parseInt(cmdData));
+        } else if (cmd.equals("FULL")) { // 全量刷新
+            incoming.writeAndFlush(new TextWebSocketFrame(gameEngine.getCurrentMapData(false)
+                    .getData()));
+        }
+    }
+
+    @Override
+    public void handlerAdded(ChannelHandlerContext ctx) throws Exception {  // (2)
+        Channel incoming = ctx.channel();
+        logger.info("[SERVER] - " + incoming.remoteAddress() + "加入");
+        channels.add(incoming);
+    }
+
+    @Override
+    public void handlerRemoved(ChannelHandlerContext ctx) throws Exception {  // (3)
+        Channel incoming = ctx.channel();
+        logger.info("Client:" + incoming.remoteAddress() + "离开");
+    }
+
+    @Override
+    public void channelActive(ChannelHandlerContext ctx) throws Exception { // (5)
+        Channel incoming = ctx.channel();
+        logger.info("Client:" + incoming.remoteAddress() + "在线");
+    }
+
+    @Override
+    public void channelInactive(ChannelHandlerContext ctx) throws Exception { // (6)
+        Channel incoming = ctx.channel();
+        logger.info("Client:" + incoming.remoteAddress() + "掉线");
+    }
+
+    @Override
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause)    // (7)
+            throws Exception {
+        Channel incoming = ctx.channel();
+        logger.error("Client:" + incoming.remoteAddress() + "异常", cause);
+        ctx.close();
+    }
+
+}
