@@ -1,6 +1,7 @@
 package com.tuling.netty.snake_game;
 
 
+import com.alibaba.fastjson.JSON;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
@@ -16,16 +17,18 @@ public class SnakeGameDataSynchHandler extends
         SimpleChannelInboundHandler<TextWebSocketFrame> {
     static final Logger logger = LoggerFactory.getLogger(SnakeGameEngine.class);
 
-    private final ChannelGroup channels ;
+    private final ChannelGroup channels;
     private final SnakeGameEngine gameEngine;
-    public SnakeGameDataSynchHandler(SnakeGameEngine gameEngine,ChannelGroup channels) {
-        this.channels=channels;
-        this.gameEngine=gameEngine;
+
+    public SnakeGameDataSynchHandler(SnakeGameEngine gameEngine, ChannelGroup channels) {
+        this.channels = channels;
+        this.gameEngine = gameEngine;
     }
 
     @Override
     protected void channelRead0(ChannelHandlerContext ctx,
                                 TextWebSocketFrame msg) throws Exception { // (1)
+
         Channel incoming = ctx.channel();
         logger.debug("接收数据  地址:{},id:{},文本:{}", incoming.remoteAddress(), incoming.id().asShortText(), msg.text());
 
@@ -43,20 +46,19 @@ public class SnakeGameDataSynchHandler extends
         } else if (cmd.equals("CONTROL")) {
             gameEngine.controlSnake(incoming.id().asShortText(), Integer.parseInt(cmdData));
         } else if (cmd.equals("FULL")) { // 全量刷新
-            incoming.writeAndFlush(new TextWebSocketFrame(gameEngine.getCurrentMapData(false)
-                    .getData()));
+            String fullData = JSON.toJSONString(gameEngine.getCurrentMapData(false));
+            incoming.writeAndFlush(new TextWebSocketFrame(fullData));
         } else if (cmd.equals("QUANTITATIVE")) {// 定量更新
             String[] vTexts = cmdData.split(",");
-            Long versions[]=new Long[vTexts.length];
+            Long versions[] = new Long[vTexts.length];
 
             for (int i = 0; i < vTexts.length; i++) {
-                versions[i]= Long.parseLong(vTexts[i]);
+                versions[i] = Long.parseLong(vTexts[i]);
             }
 
-            for (String s : gameEngine.getVersion(versions)) {
-                incoming.writeAndFlush(new TextWebSocketFrame(s));
+            for (VersionData s : gameEngine.getVersion(versions)) {
+                incoming.writeAndFlush(new TextWebSocketFrame(JSON.toJSONString(s)));
             }
-
         }
     }
 

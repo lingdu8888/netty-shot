@@ -29,8 +29,8 @@ public class SnakeGameEngine {
     private ScheduledFuture<?> future;
     private SnakeGameListener listener;
     private Long currentVersion = 0L;
-    private volatile LinkedList<MapVersion> historyVersionData = new LinkedList();
-    private MapVersion currentMapData = new MapVersion(-1, -1, null);
+    private volatile LinkedList<VersionData> historyVersionData = new LinkedList();
+    private volatile VersionData currentMapData = null;
     private static final int historyVersionMax = 20;
     private ArrayList<Food> foods = new ArrayList<>();
     private int footMaxSize = 10;
@@ -113,7 +113,7 @@ public class SnakeGameEngine {
                         || node[1] <= 0 || node[1] >= mapWidth - 1) {
                     snake.dying();
                 } else if (getMark(node).footNode > 0) { //吃掉食物
-                    digestionFood(snake,node); // 消化食物
+                    digestionFood(snake, node); // 消化食物
 //                  changeNodes.add(node);
                 }
             }
@@ -137,7 +137,6 @@ public class SnakeGameEngine {
              */
             long newVersion = currentVersion + 1;
 
-            String versionData = encodeVersion(newVersion, changeNodes);
 
             /**
              * 版本归档存储
@@ -145,8 +144,7 @@ public class SnakeGameEngine {
             while (historyVersionData.size() >= historyVersionMax) {
                 historyVersionData.removeLast();
             }
-            MapVersion changeData = new MapVersion(System.currentTimeMillis(),
-                    currentVersion, versionData);
+            VersionData changeData = encodeVersion(newVersion, changeNodes);
             historyVersionData.addFirst(changeData);
 
             /**
@@ -204,10 +202,10 @@ public class SnakeGameEngine {
             Integer[] point = new Integer[]{releasePoint / mapWidth, releasePoint % mapWidth};
             Food food = new Food(point, 1);
             foods.add(food);
-            getMark(point).footNode=1;
+            getMark(point).footNode = 1;
             return food;
         } else {
-          throw new RuntimeException("投食失败。无法找到空位投食");
+            throw new RuntimeException("投食失败。无法找到空位投食");
         }
     }
 
@@ -228,7 +226,7 @@ public class SnakeGameEngine {
         foods.remove(food); // 从食物列表中移除
         getMark(point).footNode = 0;// 清除地图中食物标记状态
         snake.grow();// 指定角色为增长状态
-        logger.info("吃掉食物 位置信息：x={},y={},角色信息:{}",point[1],point[0],snake.toString());
+        logger.info("吃掉食物 位置信息：x={},y={},角色信息:{}", point[1], point[0], snake.toString());
         return food;
     }
 
@@ -295,7 +293,7 @@ public class SnakeGameEngine {
         ArrayList<Integer[]> allPoints = new ArrayList<>(2000);
         Integer x, y;
         for (int i = 0; i < mapsMarks.length; i++) {
-            if (mapsMarks[i] != null && mapsMarks[i].snakeNodes > 0) {
+            if (mapsMarks[i] != null && !mapsMarks[i].isEmpty()) {
                 x = i % mapWidth;
                 y = i / mapWidth;
                 allPoints.add(new Integer[]{y, x});
@@ -305,34 +303,50 @@ public class SnakeGameEngine {
     }
 
     // 构建当前地图所有的像素
-    private String encodeCurrentMapData() {
-        StringBuilder sb = new StringBuilder();
-        ArrayList<Integer[]> allPoints = getAllPoint();
-        sb.append(currentVersion);
-        if (allPoints.isEmpty()) {
-            sb.append("\r\n");
-            sb.append("[NULL]");
-        } else {
-            sb.append("\r\n");
-            sb.append(encodeLine("Lime", allPoints));
+    private VersionData encodeCurrentMapData() {
+        StringBuilder body = new StringBuilder();
+        StringBuilder food = new StringBuilder();
+        Mark mark;
+        int x, y;
+        for (int i = 0; i < mapsMarks.length; i++) {
+            mark = mapsMarks[i];
+            x = i % mapWidth;
+            y = i / mapWidth;
+            if (mark != null && mark.snakeNodes > 0) {
+                body.append("," + x + "," + y);
+            } else if (mark != null && mark.footNode > 0) {
+                food.append("," + x + "," + y);
+            }
         }
-        return sb.toString();
+        List<String> cmds = new ArrayList();
+        List<String> cmdDatas = new ArrayList();
+
+        // 去掉前缀 中的逗号
+        if (body.length() > 0) {
+            body.deleteCharAt(0);
+            cmds.add("Lime");
+            cmdDatas.add(body.toString());
+        }
+        if (food.length() > 0) {
+            food.deleteCharAt(0);
+            cmds.add("Yellow");
+            cmdDatas.add(food.toString());
+        }
+        VersionData vd = new VersionData(currentVersion, System.currentTimeMillis());
+        vd.setCmds(cmds.toArray(new String[cmds.size()]));
+        vd.setCmdDatas(cmdDatas.toArray(new String[cmdDatas.size()]));
+        vd.setFull(true);
+        return vd;
     }
 
     // 构建当前版本地图像素的变更
-    private String encodeVersion(long version, ArrayList<Integer[]> changePoints) {
-        StringBuilder result = new StringBuilder();
-        result.append(currentVersion);
-
+    private VersionData encodeVersion(long version, ArrayList<Integer[]> changePoints) {
         StringBuilder body = new StringBuilder();
-        body.append("Lime");
         StringBuilder food = new StringBuilder();
-        food.append("Yellow");
         StringBuilder remove = new StringBuilder();
-        remove.append("Black");
         Mark mark;
         for (Integer[] p : changePoints) {
-            mark=  getMark(p);
+            mark = getMark(p);
             if (mark == null || mark.isEmpty()) {
                 remove.append("," + p[1] + "," + p[0]);
             } else if (mark.snakeNodes > 0) {
@@ -341,45 +355,50 @@ public class SnakeGameEngine {
                 food.append("," + p[1] + "," + p[0]);
             }
         }
-        result.append("\r\n");
-        result.append(body);
-        result.append("\r\n");
-        result.append(food);
-        result.append("\r\n");
-        result.append(remove);
-
-        return result.toString();
-    }
-
-    private String encodeLine(String color, ArrayList<Integer[]> points) {
-        StringBuilder sb = new StringBuilder();
-        sb.append(color + ",");
-        for (Integer[] point : points) {
-            sb.append(point[1]);
-            sb.append(",");
-            sb.append(point[0]);
-            sb.append(",");
+        List<String> cmds = new ArrayList();
+        List<String> cmdDatas = new ArrayList();
+        // 去掉前缀 中的逗号
+        if (body.length() > 0) {
+            body.deleteCharAt(0);
+            cmds.add("Lime");
+            cmdDatas.add(body.toString());
         }
-        sb.deleteCharAt(sb.length() - 1);
-        return sb.toString();
+        if (food.length() > 0) {
+            food.deleteCharAt(0);
+            cmds.add("Yellow");
+            cmdDatas.add(food.toString());
+        }
+        if (remove.length() > 0) {
+            remove.deleteCharAt(0);
+            cmds.add("Black");
+            cmdDatas.add(remove.toString());
+        }
+
+        VersionData vd = new VersionData(currentVersion, System.currentTimeMillis());
+        vd.setCmds(cmds.toArray(new String[cmds.size()]));
+        vd.setCmdDatas(cmdDatas.toArray(new String[cmdDatas.size()]));
+        vd.setFull(false);
+        return vd;
     }
 
 
-    public MapVersion getCurrentMapData(boolean check) {
-        if (check && currentMapData.version < currentVersion) {
-            currentMapData.version = currentVersion;
-            currentMapData.data = encodeCurrentMapData();
-            currentMapData.time = System.currentTimeMillis();
+
+
+    public VersionData getCurrentMapData(boolean check) {
+        if (currentMapData == null) {
+            currentMapData = encodeCurrentMapData();
+        } else if (check && currentMapData.getVersion() < currentVersion) {
+            currentMapData = encodeCurrentMapData();
         }
         return currentMapData;
     }
 
-    public List<String> getVersion(Long[] versionId) {
-        List<String> list = new ArrayList<>();
-        for (MapVersion historyVersionDatum : historyVersionData) {
+    public List<VersionData> getVersion(Long[] versionId) {
+        List<VersionData> list = new ArrayList<>();
+        for (VersionData historyVersion : historyVersionData) {
             for (long v : versionId) {
-                if (historyVersionDatum.version == v) {
-                    list.add(historyVersionDatum.data);
+                if (historyVersion.getVersion() == v) {
+                    list.add(historyVersion);
                 }
             }
         }
@@ -404,30 +423,6 @@ public class SnakeGameEngine {
         }
     }
 
-    // 地图版本信息
-    public static class MapVersion {
-        private long time;
-        private long version;
-        private String data;
-
-        public MapVersion(long time, long version, String data) {
-            this.time = time;
-            this.version = version;
-            this.data = data;
-        }
-
-        public long getTime() {
-            return time;
-        }
-
-        public long getVersion() {
-            return version;
-        }
-
-        public String getData() {
-            return data;
-        }
-    }
 
     private static class Food {
         // 当前位位置
@@ -441,7 +436,7 @@ public class SnakeGameEngine {
     }
 
     public static interface SnakeGameListener {
-        public void versionChange(MapVersion changeData, MapVersion currentData);
+        public void versionChange(VersionData changeData, VersionData currentData);
     }
 
 

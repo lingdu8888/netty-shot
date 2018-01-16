@@ -7,9 +7,16 @@ package com.tuling.netty.snake_game;
 public class VersionData {
     private long version;// 版本号
     private long vTime; // 版本构建时间
-    private boolean full;
+    private Boolean full;
     private String cmds[]; // 命令
     private String cmdDatas[];// 命令数据
+
+    public VersionData(long version, long vTime) {
+        this.version = version;
+        this.vTime = vTime;
+        this.full=false;
+    }
+
 
     public long getVersion() {
         return version;
@@ -27,6 +34,14 @@ public class VersionData {
         this.vTime = vTime;
     }
 
+    public Boolean getFull() {
+        return full;
+    }
+
+    public void setFull(Boolean full) {
+        this.full = full;
+    }
+
     public String[] getCmds() {
         return cmds;
     }
@@ -41,13 +56,5 @@ public class VersionData {
 
     public void setCmdDatas(String[] cmdDatas) {
         this.cmdDatas = cmdDatas;
-    }
-
-    public boolean isFull() {
-        return full;
-    }
-
-    public void setFull(boolean full) {
-        this.full = full;
     }
 }

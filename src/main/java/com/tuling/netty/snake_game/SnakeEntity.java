@@ -203,9 +203,9 @@ public class SnakeEntity {
 
     @Override
     public String toString() {
-        return
-                "accountId='" + accountId + '\'' +
+        return "accountId='" + accountId + '\'' +
                 ", gameName='" + gameName + '\'' +
-                ", state=" + state ;
+                ", state=" + state   +
+                ",direction="+direction;
     }
 }

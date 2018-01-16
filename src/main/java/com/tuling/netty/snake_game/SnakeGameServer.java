@@ -1,5 +1,6 @@
 package com.tuling.netty.snake_game;
 
+import com.alibaba.fastjson.JSON;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.*;
 import io.netty.channel.group.ChannelGroup;
@@ -34,8 +35,8 @@ public class SnakeGameServer {
         gameEngine.start();
         gameEngine.setListener(new SnakeGameEngine.SnakeGameListener() {
             @Override
-            public void versionChange(SnakeGameEngine.MapVersion changeData, SnakeGameEngine.MapVersion currentData) {
-                sendVersionData(changeData.getData());
+            public void versionChange(VersionData changeData, VersionData currentData) {
+                sendVersionData(changeData);
             }
         });
 
@@ -73,8 +74,8 @@ public class SnakeGameServer {
         }
     }
 
-    private void sendVersionData(String data) {
-        String str = data;
+    private void sendVersionData(VersionData data) {
+        String str = JSON.toJSONString(data);
         for (Channel channel : channels) {
             channel.writeAndFlush(new TextWebSocketFrame(str));
         }
