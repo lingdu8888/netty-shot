@@ -113,9 +113,8 @@ public class SnakeGameEngine {
                         || node[1] <= 0 || node[1] >= mapWidth - 1) {
                     snake.dying();
                 } else if (getMark(node).footNode > 0) { //吃掉食物
-                    digestionFood(node); // 消化食物
-                    snake.grow();// 指定角色为增长状态
-//                    changeNodes.add(node);
+                    digestionFood(snake,node); // 消化食物
+//                  changeNodes.add(node);
                 }
             }
 
@@ -201,14 +200,19 @@ public class SnakeGameEngine {
                 i = 0;
             }
         }
-        Integer[] point = new Integer[]{releasePoint / mapWidth, releasePoint % mapWidth};
-        Food food = new Food(point, 1);
-        foods.add(food);
-        return food;
+        if (releasePoint > -1) {
+            Integer[] point = new Integer[]{releasePoint / mapWidth, releasePoint % mapWidth};
+            Food food = new Food(point, 1);
+            foods.add(food);
+            getMark(point).footNode=1;
+            return food;
+        } else {
+          throw new RuntimeException("投食失败。无法找到空位投食");
+        }
     }
 
-
-    private Food digestionFood(Integer[] point) {
+    // 吃掉食物
+    private Food digestionFood(SnakeEntity snake, Integer[] point) {
         Food food = null;
         for (Food f : foods) {
             if (Arrays.equals(f.point, point)) {
@@ -221,8 +225,10 @@ public class SnakeGameEngine {
                     String.format("消化食物异常，坐标上不存在指定食物x:%s,y:%s", point[1], point[00]));
         }
 
-        foods.remove(food);
-        getMark(point).footNode = 0;
+        foods.remove(food); // 从食物列表中移除
+        getMark(point).footNode = 0;// 清除地图中食物标记状态
+        snake.grow();// 指定角色为增长状态
+        logger.info("吃掉食物 位置信息：x={},y={},角色信息:{}",point[1],point[0],snake.toString());
         return food;
     }
 
@@ -323,7 +329,7 @@ public class SnakeGameEngine {
         StringBuilder food = new StringBuilder();
         food.append("Yellow");
         StringBuilder remove = new StringBuilder();
-        food.append("Black");
+        remove.append("Black");
         Mark mark;
         for (Integer[] p : changePoints) {
             mark=  getMark(p);
@@ -335,6 +341,7 @@ public class SnakeGameEngine {
                 food.append("," + p[1] + "," + p[0]);
             }
         }
+        result.append("\r\n");
         result.append(body);
         result.append("\r\n");
         result.append(food);
@@ -367,7 +374,7 @@ public class SnakeGameEngine {
         return currentMapData;
     }
 
-    public List<String> getVersion(long... versionId) {
+    public List<String> getVersion(Long[] versionId) {
         List<String> list = new ArrayList<>();
         for (MapVersion historyVersionDatum : historyVersionData) {
             for (long v : versionId) {

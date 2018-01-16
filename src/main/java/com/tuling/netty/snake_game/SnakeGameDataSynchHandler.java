@@ -40,12 +40,23 @@ public class SnakeGameDataSynchHandler extends
 
         if (cmd.equals("JOIN")) {
             gameEngine.newSnake(incoming.id().asShortText(), cmdData);
-            // TODO 需要发送一次全量更新
         } else if (cmd.equals("CONTROL")) {
             gameEngine.controlSnake(incoming.id().asShortText(), Integer.parseInt(cmdData));
         } else if (cmd.equals("FULL")) { // 全量刷新
             incoming.writeAndFlush(new TextWebSocketFrame(gameEngine.getCurrentMapData(false)
                     .getData()));
+        } else if (cmd.equals("QUANTITATIVE")) {// 定量更新
+            String[] vTexts = cmdData.split(",");
+            Long versions[]=new Long[vTexts.length];
+
+            for (int i = 0; i < vTexts.length; i++) {
+                versions[i]= Long.parseLong(vTexts[i]);
+            }
+
+            for (String s : gameEngine.getVersion(versions)) {
+                incoming.writeAndFlush(new TextWebSocketFrame(s));
+            }
+
         }
     }
 

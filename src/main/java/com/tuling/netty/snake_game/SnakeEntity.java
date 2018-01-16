@@ -200,4 +200,12 @@ public class SnakeEntity {
         }
         this.state = State.alive;
     }
+
+    @Override
+    public String toString() {
+        return
+                "accountId='" + accountId + '\'' +
+                ", gameName='" + gameName + '\'' +
+                ", state=" + state ;
+    }
 }
