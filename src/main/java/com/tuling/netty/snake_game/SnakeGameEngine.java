@@ -85,9 +85,10 @@ public class SnakeGameEngine {
                 case alive:
                     snake.moveStep();
                     break;
-                case grow:
+                case grow:// TODO 需重构成 先进食后消化
                     snake.addToHead();
-                    snake.moveStep();
+                    snake.alive(); //  增涨后恢复为普通状态
+//                    snake.moveStep();
                     break;
                 case dying:
                     snake.die();
@@ -395,7 +396,8 @@ public class SnakeGameEngine {
 
     public List<VersionData> getVersion(Long[] versionId) {
         List<VersionData> list = new ArrayList<>();
-        for (VersionData historyVersion : historyVersionData) {
+        VersionData[] historys = historyVersionData.toArray(new VersionData[list.size()]);
+        for (VersionData historyVersion : historys) {
             for (long v : versionId) {
                 if (historyVersion.getVersion() == v) {
                     list.add(historyVersion);

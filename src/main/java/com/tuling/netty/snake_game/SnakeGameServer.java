@@ -26,7 +26,7 @@ public class SnakeGameServer {
 
     public SnakeGameServer(int port) {
         this.port = port;
-        gameEngine = new SnakeGameEngine(80, 80, 1000);
+        gameEngine = new SnakeGameEngine(80, 80, 500);
         channels = new DefaultChannelGroup(GlobalEventExecutor.INSTANCE);
     }
 

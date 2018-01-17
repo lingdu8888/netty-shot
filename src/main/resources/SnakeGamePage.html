@@ -21,13 +21,13 @@
 
     var host = window.location.host;
     var accountName = "";
+    var connectionState;//Connect,Disconnect
     //判断当前浏览器是否支持WebSocket
     if ('WebSocket' in window) {
         websocket = new WebSocket("ws://" + host + "/ws");
-        accountName = prompt("请输入你的游戏名称:", "我的小宝");
-    }
-    else {
-        alert("Not Support WebSocket!");
+        accountName = prompt("请输入你的游戏名称:", "我的小可爱");
+    }else {
+        alert("当前浏览器不支持 WebSocket!");
     }
 
 
@@ -39,18 +39,22 @@
     websocket.onopen = function (event) {
         // 加入游戏
         websocket.send("JOIN:" + accountName);
+        connectionState="Connect";
     }
 
     //接收到消息的回调方法
     // 收到服务器发送的消息
     websocket.onmessage = function (event) {
         if (event.data != "[NULL]") {
-            refresh(event.data);
+//            refresh(event.data);
+            pushVersionData(event.data);
         }
     }
 
     //连接关闭的回调方法
     websocket.onclose = function () {
+        // 断开连接
+        connectionState="Disconnect";
     }
 
 
@@ -59,55 +63,101 @@
         websocket.close();
     }
 
-    var canvas = document.getElementById('myCanvas');
-    var ctx = canvas.getContext('2d');
-    var size = 10;
-    var version = 0;
+
 
     function draw(color, x, y) {
         ctx.fillStyle = color;
         ctx.fillRect(x * size, y * size, size, size);
-
     }
 
     document.onkeydown = function (e) {
-        /* alert(e.keyCode)*/
         websocket.send("CONTROL:" + e.keyCode);
     };
 
-    function refresh(data) {
-        var lines = data.split("\r\n");
-        lastVersion = parseInt(lines[0]);
-        // 像素编码
-        var cmds;
-        for (var i = 1; i < lines.length; i++) {
-            cmds = lines[i].split(",");
-            for (var k = 1; k < cmds.length; k = k + 2) {
-                draw(cmds[0], cmds[k], cmds[k + 1]);
+     var canvas = document.getElementById('myCanvas');
+     var ctx = canvas.getContext('2d');
+     var size = 10;
+     function refresh(version) {
+        var data;
+        console.log("当前版本:%s,命令:%s,数据:%s",version.version,version.cmds,version.cmdDatas);
+        for(var i=0;i<version.cmds.length;i++){
+            data=version.cmdDatas[i].split(",");
+            for(var k=0;k<data.length;k+=2){
+                draw(version.cmds[i], data[k], data[k + 1]);
             }
         }
+
+         dataQueues.splice($.inArray(version, dataQueues), 1);  //从对列当中清除已更亲版本
+         lastTime=$.now();// 最后更新时间
+         lastVersion=version.version; // 最后更新版本
     }
-    // 推送版本
+
+     // 画面刷新算法
+     var lastVersion = 0;
+     var lastTime = 0;
+     // 数据对列
+     var dataQueues = new Array(30);
+
+     function VersionData(full) {
+         this.version;  // 版本号
+         this.time;    // 实际更新时间
+         this.full=full;//是否为全量版本
+         this.cmds=[];
+         this.cmdDatas=[];
+         this.requestTime =$.now(); //发起更新时间
+     }
+
+     // 定期对版本进行检测
+     setInterval(versionUpdateCheck,100);
+
+     // 推送版本
     function pushVersionData(data) {
         // 解析版本
+       var vd= $.parseJSON(data);
+       // 判断是否为重复推送
+       if(vd.version<=lastVersion){
+               return;
+       }
+        var localVersion = getVersion(vd.version);
+        if (vd.full) {
+            localVersion = getFullVersion();
+        } else {
+            localVersion = getVersion(vd.version);
+        }
+
+       if (localVersion == null) {
+           localVersion=new VersionData(vd.full);
+           dataQueues.push(localVersion);
+       }
+        localVersion.version = vd.version;
+        localVersion.time = vd.time;
+        localVersion.full = vd.full;//是否为全量版本
+        localVersion.cmds = vd.cmds;
+        localVersion.cmdDatas = vd.cmdDatas;
     }
+
     // 版本更新检测
-    function versionUpdateDetection() {
+    function versionUpdateCheck() {
+        /**
+         * 连接状态检测
+         * */
+        if(connectionState!="Connect"){// 未连接
+            return;
+        }
+
         /**
          * 全量更新逻辑
          * */
-        var fullVersion = searchFullVersion();
-        if (fullVersion != null && fullVersion.vData != null) { // 全量刷新界面
-            refresh(fullVersion.vData);
-            // 删除
-            dataQueues.splice($.inArray(fullVersion, dataQueues), 1);
-            return;
+        var fullVersion = getFullVersion();
+        if (fullVersion != null && fullVersion.time != null) { // 全量刷新界面
+            refresh(fullVersion);
+             return;
         } else if (lastVersion == 0 && fullVersion == null) {// 全量更新
             var vd = new VersionData(true);
             dataQueues.push(vd);
             websocket.send("FULL:true");
             return;
-        } else if (fullVersion != null && fullVersion.vData == null) { // 等待全量更新
+        } else if (fullVersion != null && fullVersion.time == null) { // 等待全量更新
             return;
         }
 
@@ -119,9 +169,9 @@
         // TODO 等待定量更新完成超时需要重新定量更新
         if (lastVersion != 0) {
             var nextVersionNumber = lastVersion + 1;
-            var nextVersion = searchVersion(nextVersionNumber);
-            if (nextVersion != null && nextVersion.vData != null) { // 基于版本 刷新界面
-                refresh(nextVersion.vData);
+            var nextVersion = getVersion(nextVersionNumber);
+            if (nextVersion != null && nextVersion.time != null) { // 基于版本 刷新界面
+                refresh(nextVersion);
                 return;
             } else if (nextVersion == null && $.now() - lastTime > 500) { //下个版本获取超时 定量更新
                 nextVersion = new VersionData(false);
@@ -129,46 +179,33 @@
                 dataQueues.push(vd);
                 websocket.send("QUANTITATIVE:" + (lastVersion + 1));
                 return;
-            } else if (nextVersion != null && nextVersion.vData == null) { // 等待定量更新完成
+            } else if (nextVersion != null && nextVersion.time == null) { // 等待定量更新完成
                 return;
             }
         }
     }
-
-    function searchFullVersion() {
+    // 获取全量版本
+    function getFullVersion() {
         for (var i = 0; i < dataQueues.length; i++) {
-            if (dataQueues[i].isFull) {
+            if (dataQueues[i] != null && dataQueues[i].full) {
                 return dataQueues[i];
             }
         }
-    }
-    function searchVersion(version) {
-        for (var i = 0; i < dataQueues.length; i++) {
-            if (dataQueues[i].version == version) {
-                return dataQueues[i];
-            }
-        }
+        return null;
     }
 
+     // 基于版本号获取指定版本
+     function getVersion(version) {
+         for (var i = 0; i < dataQueues.length; i++) {
+             if (dataQueues[i] != null && dataQueues[i].version == version) {
+                 return dataQueues[i];
+             }
+         }
+         return null;
+     }
 
-    // 画面刷新算法
-    var lastVersion = 0;
-    var lastTime = 0;
-    // 数据对列
-    var dataQueues = new Array(10);
 
-    // 读取更新画面
-    function readFrames() {
 
-    }
-
-    function VersionData(isFull) {
-        this.version = version; // 版本号
-        this.vData = vData;   // 版本数据
-        this.vTime = vTime; // 更新时间
-        this.isFull = isFull;//是否为全量版本
-        this.requestTime =$.now(); // 发起更新时间
-    }
 
 
     //refresh("Lime,0,0,1,1,2,2\r\nYellow,4,4,5,5");

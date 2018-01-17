@@ -157,6 +157,10 @@ public class SnakeEntity {
         this.state = State.grow;
         logger.info(" id:{} name:{}", accountId, gameName);
     }
+    public void alive(){
+        this.state=State.alive;
+    }
+
     public void die() {
         int bodySize = bodys.size();
         for (int i = 0; i < bodySize; i++) {
