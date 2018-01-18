@@ -79,7 +79,9 @@
      var size = 10;
      function refresh(version) {
         var data;
-        console.log("当前版本:%s,命令:%s,数据:%s",version.version,version.cmds,version.cmdDatas);
+        if(!version.full){
+         console.log("当前版本:%s,是否全量:%s,命令:%s,数据:%s",version.version,version.full,version.cmds,version.cmdDatas);
+        }
         for(var i=0;i<version.cmds.length;i++){
             data=version.cmdDatas[i].split(",");
             for(var k=0;k<data.length;k+=2){
@@ -108,7 +110,7 @@
      }
 
      // 定期对版本进行检测
-     setInterval(versionUpdateCheck,100);
+     setInterval(versionUpdateCheck,60);
 
      // 推送版本
     function pushVersionData(data) {

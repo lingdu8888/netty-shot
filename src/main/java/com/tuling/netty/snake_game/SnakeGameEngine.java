@@ -80,6 +80,7 @@ public class SnakeGameEngine {
         for (SnakeEntity snake : snakeNodes.values()) {
             switch (snake.getState()) {
                 case inactive:
+                    logger.info("激活新角色:{}当前版本:{}",snake.toString(),currentVersion+1);
                     snake.active();
                     break;
                 case alive:
@@ -375,7 +376,7 @@ public class SnakeGameEngine {
             cmdDatas.add(remove.toString());
         }
 
-        VersionData vd = new VersionData(currentVersion, System.currentTimeMillis());
+        VersionData vd = new VersionData(version, System.currentTimeMillis());
         vd.setCmds(cmds.toArray(new String[cmds.size()]));
         vd.setCmdDatas(cmdDatas.toArray(new String[cmdDatas.size()]));
         vd.setFull(false);
