@@ -18,8 +18,9 @@ public class SnakeEntity {
     private String gameName;
     private Direction direction;
     private ArrayList<Integer[]> bodys = new ArrayList<>();//y,x
-    public ArrayList<Integer[]> addNodes = new ArrayList<>();
-    public ArrayList<Integer[]> removeNodes = new ArrayList<>();
+
+    private ArrayList<Integer[]> addNodes = new ArrayList<>(); // 当前地图上添加的临时节点
+    private ArrayList<Integer[]> removeNodes = new ArrayList<>();//当前地图上移除的临时节点
 
     public State state;
 
@@ -37,11 +38,11 @@ public class SnakeEntity {
          */
         grow,
         /**
-         *待死亡
+         * 待死亡
          */
         dying,
         /**
-         *死亡
+         * 死亡
          */
         die
     }
@@ -84,8 +85,10 @@ public class SnakeEntity {
 
     public void removeToTail() {
         Integer[] node = bodys.remove(bodys.size() - 1);
-        removeNodes.add(node);
-        engine.getMark(node).snakeNodes--;
+        if (engine.isMapRange(node)) {
+            removeNodes.add(node);
+            engine.getMark(node).snakeNodes--;
+        }
     }
 
     //0,0 0,1 0,2 0,3 0,4 0,5
@@ -122,9 +125,11 @@ public class SnakeEntity {
 
     private void add(int index, Integer[] point) {
         bodys.add(index, point);
-        addNodes.add(point);
-        engine.getMark(point).snakeNodes++;
-        logger.debug("添加节点 x:{} y:{}",point[1],point[0]);
+        if (engine.isMapRange(point)) {
+            engine.getMark(point).snakeNodes++;
+            addNodes.add(point);
+        }
+        logger.debug("添加节点 x:{} y:{}", point[1], point[0]);
     }
 
     public String getAccountId() {
@@ -153,12 +158,13 @@ public class SnakeEntity {
     }
 
     // 生长一节
-    public void grow(){
+    public void grow() {
         this.state = State.grow;
         logger.info(" id:{} name:{}", accountId, gameName);
     }
-    public void alive(){
-        this.state=State.alive;
+
+    public void alive() {
+        this.state = State.alive;
     }
 
     public void die() {
@@ -204,12 +210,18 @@ public class SnakeEntity {
         }
         this.state = State.alive;
     }
-
+    // 获取头部位点
+    protected Integer[] getHead() {
+        if (bodys.isEmpty()) {
+            return null;
+        }
+        return bodys.get(0);
+    }
     @Override
     public String toString() {
         return "accountId='" + accountId + '\'' +
                 ", gameName='" + gameName + '\'' +
-                ", state=" + state   +
-                ",direction="+direction;
+                ", state=" + state +
+                ",direction=" + direction;
     }
 }

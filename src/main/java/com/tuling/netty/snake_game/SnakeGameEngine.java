@@ -94,7 +94,7 @@ public class SnakeGameEngine {
                 case dying:
                     snake.die();
                     break;
-                case die:
+                case die:   //角色已经死亡
                     break;
             }
         }
@@ -107,19 +107,17 @@ public class SnakeGameEngine {
          * 执行触发的游戏规则
          */
         for (SnakeEntity snake : snakeNodes.values()) {
+            //断定蛇头是否撞击边界
+            if (!snake.isDie() && !isMapRange(snake.getHead())) {
+                snake.dying();
+            }
             for (Integer[] node : snake.getAddNodes()) {
-                //断定是否撞击蛇身
-                if (getMark(node).snakeNodes > 1) {
+                if (getMark(node).snakeNodes > 1) { // 是否撞击蛇身
                     snake.dying();
-                } else if (node[0] <= 0 || node[0] >= mapHeight - 1 // 撞击边界
-                        || node[1] <= 0 || node[1] >= mapWidth - 1) {
-                    snake.dying();
-                } else if (getMark(node).footNode > 0) { //吃掉食物
-                    digestionFood(snake, node); // 消化食物
-//                  changeNodes.add(node);
+                } else if (getMark(node).footNode > 0) {// 吃掉食物
+                    digestionFood(snake, node);
                 }
             }
-
             changeNodes.addAll(snake.getAddNodes());
             changeNodes.addAll(snake.getRemoveNodes());
         }
@@ -280,9 +278,22 @@ public class SnakeGameEngine {
 
     public Mark getMark(Integer[] point) {
         int index = point[0] * mapWidth + point[1];
+        if (index < 0 || index >= mapsMarks.length) {
+            throw new IllegalArgumentException(String
+                    .format("超出地图边界x=%s,y=%s", point[1], point[0]));
+        }
         return getMark(index);
     }
 
+    /**
+     * 是否在地图边界内？
+     *
+     * @param point
+     * @return
+     */
+    public boolean isMapRange(Integer[] point) {
+        return point[0] >= 0 && point[0] < mapHeight && point[1] >= 0 && point[1] < mapWidth;
+    }
     private Mark getMark(int index) {
         if (mapsMarks[index] == null) {
             mapsMarks[index] = new Mark();
