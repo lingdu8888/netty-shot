@@ -4,7 +4,7 @@ package com.tuling.netty.snake_game;
  * 版本数据
  * Created by Tommy on 2018/1/16.
  */
-public class VersionData {
+public class VersionData implements Cloneable{
     private long version;// 版本号
     private long time; // 版本构建时间
     private Boolean full;
@@ -17,6 +17,8 @@ public class VersionData {
         this.full=false;
     }
 
+    public VersionData() {
+    }
 
     public long getVersion() {
         return version;
@@ -57,4 +59,5 @@ public class VersionData {
     public void setCmdDatas(String[] cmdDatas) {
         this.cmdDatas = cmdDatas;
     }
+
 }

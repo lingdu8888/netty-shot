@@ -337,7 +337,7 @@ public class SnakeGameEngine {
         // 去掉前缀 中的逗号
         if (body.length() > 0) {
             body.deleteCharAt(0);
-            cmds.add("Lime");
+            cmds.add("Green");
             cmdDatas.add(body.toString());
         }
         if (food.length() > 0) {
@@ -373,7 +373,7 @@ public class SnakeGameEngine {
         // 去掉前缀 中的逗号
         if (body.length() > 0) {
             body.deleteCharAt(0);
-            cmds.add("Lime");
+            cmds.add("Green");
             cmdDatas.add(body.toString());
         }
         if (food.length() > 0) {
@@ -417,6 +417,18 @@ public class SnakeGameEngine {
             }
         }
         return list;
+    }
+
+    public DrawingCommand getDrawingCommand(String accountId){
+        DrawingCommand cmd = null;
+        if (!snakeNodes.containsKey(accountId)) {
+            return cmd;
+        }
+        SnakeEntity snake = snakeNodes.get(accountId);
+        Integer[] head = snake.getHead();
+        if (head != null)
+            cmd = new DrawingCommand("Lime", head[1] + "," + head[0]);
+        return cmd;
     }
 
     public void setListener(SnakeGameListener listener) {

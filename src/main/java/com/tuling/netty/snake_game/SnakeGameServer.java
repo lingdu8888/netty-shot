@@ -14,6 +14,9 @@ import io.netty.handler.codec.http.websocketx.TextWebSocketFrame;
 import io.netty.handler.codec.http.websocketx.WebSocketServerProtocolHandler;
 import io.netty.handler.stream.ChunkedWriteHandler;
 import io.netty.util.concurrent.GlobalEventExecutor;
+import org.springframework.beans.BeanUtils;
+
+import java.util.Arrays;
 
 /**
  * Websocket 聊天服务器-服务端
@@ -75,9 +78,23 @@ public class SnakeGameServer {
     }
 
     private void sendVersionData(VersionData data) {
+        VersionData copy=new VersionData(); // 副本
+        BeanUtils.copyProperties(data,copy);
         String str = JSON.toJSONString(data);
+        String[] cmds,cmdDatas;
         for (Channel channel : channels) {
-            channel.writeAndFlush(new TextWebSocketFrame(str));
+            DrawingCommand cmd = gameEngine.getDrawingCommand(channel.id().asShortText());
+            if (cmd != null) {
+                cmds = Arrays.copyOf(data.getCmds(), data.getCmds().length + 1);
+                cmds[cmds.length - 1] = cmd.getCmd();
+                cmdDatas = Arrays.copyOf(data.getCmdDatas(), data.getCmdDatas().length + 1);
+                cmdDatas[cmdDatas.length - 1] = cmd.getCmdData();
+                copy.setCmds(cmds);
+                copy.setCmdDatas(cmdDatas);
+                channel.writeAndFlush(new TextWebSocketFrame(JSON.toJSONString(copy)));
+            } else {
+                channel.writeAndFlush(new TextWebSocketFrame(str));
+            }
         }
     }
 
