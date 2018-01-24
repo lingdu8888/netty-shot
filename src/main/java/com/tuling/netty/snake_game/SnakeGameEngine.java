@@ -16,7 +16,7 @@ import java.util.concurrent.TimeUnit;
  */
 public class SnakeGameEngine {
     static final Logger logger = LoggerFactory.getLogger(SnakeGameEngine.class);
-    public Map<String, SnakeEntity> snakeNodes = new HashMap<>();
+    public Map<String, SnakeEntity> snakes = new HashMap<>();
     private final int mapWidth;
     private final int mapHeight;
 
@@ -26,7 +26,9 @@ public class SnakeGameEngine {
     private final int refreshTime;
 
     private ScheduledExecutorService executorService = Executors.newScheduledThreadPool(2);
-    private ScheduledFuture<?> future;
+    private ScheduledExecutorService stateService = Executors.newScheduledThreadPool(1);
+
+    private ScheduledFuture<?> mapFuture;
     private SnakeGameListener listener;
     private Long currentVersion = 0L;
     private volatile LinkedList<VersionData> historyVersionData = new LinkedList();
@@ -34,6 +36,7 @@ public class SnakeGameEngine {
     private static final int historyVersionMax = 20;
     private ArrayList<Food> foods = new ArrayList<>();
     private int footMaxSize = 10;
+    private ScheduledFuture<?> stateFuture;
 
     public SnakeGameEngine() {
         mapWidth = 400;
@@ -54,12 +57,31 @@ public class SnakeGameEngine {
     public void start() {
         logger.info("游戏引擎启动...");
         // 固定间隔执行任务
-        future = executorService.scheduleWithFixedDelay(new Runnable() {
+        mapFuture = executorService.scheduleWithFixedDelay(new Runnable() {
             @Override
             public void run() {
                 gameTimeStep();
             }
         }, refreshTime, refreshTime, TimeUnit.MILLISECONDS);
+
+        // 状态信息更新
+       stateFuture= stateService.scheduleWithFixedDelay(new Runnable() {
+            @Override
+            public void run() {
+                // 触发状态变更事件
+                fireStateChange();
+            }
+        }, 1000, 1000, TimeUnit.MILLISECONDS);
+    }
+
+    private void fireStateChange(){
+        if (listener != null) {
+            GameStatistics statistics=new GameStatistics();
+            statistics.setLastVersion(currentVersion);
+            statistics.setOnlineCount(snakes.size());
+            statistics.setRankingList(getRankingList());
+            listener.statusChange(statistics);
+        }
     }
 
     //animate
@@ -77,10 +99,10 @@ public class SnakeGameEngine {
         /**
          * 基于状态执行算法
          */
-        for (SnakeEntity snake : snakeNodes.values()) {
+        for (SnakeEntity snake : snakes.values()) {
             switch (snake.getState()) {
                 case inactive:
-                    logger.info("激活新角色:{}当前版本:{}",snake.toString(),currentVersion+1);
+                    logger.info("激活新角色:{}当前版本:{}", snake.toString(), currentVersion + 1);
                     snake.active();
                     break;
                 case alive:
@@ -106,14 +128,17 @@ public class SnakeGameEngine {
         /**
          * 执行触发的游戏规则
          */
-        for (SnakeEntity snake : snakeNodes.values()) {
+        for (SnakeEntity snake : snakes.values()) {
             //断定蛇头是否撞击边界
             if (!snake.isDie() && !isMapRange(snake.getHead())) {
                 snake.dying();
             }
             for (Integer[] node : snake.getAddNodes()) {
                 if (getMark(node).snakeNodes > 1) { // 是否撞击蛇身
+                    // 死亡规则触发
                     snake.dying();
+                    // 击杀规则触发
+                    killSnake(snake, node);
                 } else if (getMark(node).footNode > 0) {// 吃掉食物
                     digestionFood(snake, node);
                 }
@@ -167,8 +192,43 @@ public class SnakeGameEngine {
         }
     }
 
+    /**
+     * @param die       被击杀角色数
+     * @param killPoint 击杀点位
+     */
+    private void killSnake(SnakeEntity die, Integer[] killPoint) {
+        // 找出击杀点位下所有角色
+        List<SnakeEntity> list = getSnakeByNode(killPoint);
+        list.remove(die); // 移除角色自身
+        SnakeEntity killer = null;
+        for (SnakeEntity snakeEntity : list) {
+            if (Arrays.equals(killPoint, snakeEntity.getHead()))
+                continue;
+            killer = snakeEntity;
+            break;
+        }
+
+        if (killer != null) {
+            killer.addKillIntegral();// 增加角色击杀积分
+            logger.info("{}击杀{}", killer.getGameName(), die.getGameName());
+        }
+    }
+
+    private List<SnakeEntity> getSnakeByNode(Integer[] node) {
+        List<SnakeEntity> result = new ArrayList<>();
+        for (SnakeEntity snakeEntity : snakes.values()) {
+            for (Integer[] integers : snakeEntity.getBodys()) {
+                if (Arrays.equals(integers, node)) {
+                    result.add(snakeEntity);
+                    break;
+                }
+            }
+        }
+        return result;
+    }
+
     private void afterBuild() {
-        for (SnakeEntity snake : snakeNodes.values()) {
+        for (SnakeEntity snake : snakes.values()) {
             snake.flush();
         }
     }
@@ -233,8 +293,11 @@ public class SnakeGameEngine {
 
     // 停止运行中的地图
     public void stop() {
-        if (future != null && !future.isCancelled()) {
-            future.cancel(false);
+        if (mapFuture != null && !mapFuture.isCancelled()) {
+            mapFuture.cancel(false);
+        }
+        if (stateFuture != null&&!stateFuture.isCancelled()) {
+            stateFuture.cancel(false);
         }
     }
 
@@ -247,18 +310,18 @@ public class SnakeGameEngine {
         SnakeEntity node = new SnakeEntity(this, accountId, startPoint,
                 3, SnakeEntity.Direction.right);
         node.setGameName(accountName);
-        snakeNodes.put(node.getAccountId(), node);
+        snakes.put(node.getAccountId(), node);
         this.logger.info("新增Snake ID:{} 出生点位:{} 初始节点:{}", accountId, startPoint, 3);
         return node;
     }
 
     public void controlSnake(String accountId, int controlCode) {
-        if (!snakeNodes.containsKey(accountId)) {
+        if (!snakes.containsKey(accountId)) {
             logger.warn("找不到指定帐户");
             return;
         }
 
-        SnakeEntity snake = snakeNodes.get(accountId);
+        SnakeEntity snake = snakes.get(accountId);
         switch (controlCode) {
             case 37:
                 snake.setDirection(SnakeEntity.Direction.left);
@@ -294,6 +357,7 @@ public class SnakeGameEngine {
     public boolean isMapRange(Integer[] point) {
         return point[0] >= 0 && point[0] < mapHeight && point[1] >= 0 && point[1] < mapWidth;
     }
+
     private Mark getMark(int index) {
         if (mapsMarks[index] == null) {
             mapsMarks[index] = new Mark();
@@ -395,8 +459,6 @@ public class SnakeGameEngine {
     }
 
 
-
-
     public VersionData getCurrentMapData(boolean check) {
         if (currentMapData == null) {
             currentMapData = encodeCurrentMapData();
@@ -419,17 +481,70 @@ public class SnakeGameEngine {
         return list;
     }
 
-    public DrawingCommand getDrawingCommand(String accountId){
+    public DrawingCommand getDrawingCommand(String accountId) {
         DrawingCommand cmd = null;
-        if (!snakeNodes.containsKey(accountId)) {
+        if (!snakes.containsKey(accountId)) {
             return cmd;
         }
-        SnakeEntity snake = snakeNodes.get(accountId);
+        SnakeEntity snake = snakes.get(accountId);
         Integer[] head = snake.getHead();
         if (head != null)
             cmd = new DrawingCommand("Lime", head[1] + "," + head[0]);
         return cmd;
     }
+
+
+    /**
+     * 获取积分榜 前10位
+     * @return
+     */
+    public List<IntegralInfo> getRankingList() {
+        List<IntegralInfo> result=new ArrayList<>(10);
+        List<SnakeEntity> list = new ArrayList<>(snakes.size());
+        list.addAll(snakes.values());
+         Collections.sort(list, new Comparator<SnakeEntity>() {
+            @Override
+            public int compare(SnakeEntity o1, SnakeEntity o2) {
+                return o1.getKillIntegral() - o2.getKillIntegral();
+            }
+        });
+        IntegralInfo info;
+        for (int i = 0; i < list.size() && i < 10; i++) {
+            info=new IntegralInfo();
+            info.setLastVersion(currentVersion);
+            info.setGameName(list.get(i).getGameName());
+            info.setAccountId(list.get(i).getAccountId());
+            info.setDieIntegral(list.get(i).getDieIntegral());
+            info.setKillIntegral(list.get(i).getKillIntegral());
+            result.add(info);
+        }
+        return result;
+    }
+
+    public SnakeEntity getSnakeByAccountId(String accountId){
+        if (!snakes.containsKey(accountId)) {
+            logger.warn("找不到指定帐户");
+            return null;
+        }
+        return snakes.get(accountId);
+    }
+
+    public IntegralInfo getIntegralInfoByAccountId(String accountId){
+        if (!snakes.containsKey(accountId)) {
+            logger.warn("找不到指定帐户");
+            return null;
+        }
+        SnakeEntity snake = snakes.get(accountId);
+        IntegralInfo info = new IntegralInfo();
+        info.setLastVersion(currentVersion);
+        info.setGameName(snake.getGameName());
+        info.setAccountId(snake.getAccountId());
+        info.setDieIntegral(snake.getDieIntegral());
+        info.setKillIntegral(snake.getKillIntegral());
+        return info;
+    }
+
+
 
     public void setListener(SnakeGameListener listener) {
         this.listener = listener;
@@ -440,7 +555,7 @@ public class SnakeGameEngine {
     }
 
     // 地图标记位
-    static class Mark {
+     static class Mark {
         public int snakeNodes = 0;
         public int footNode = 0;//1,2,3,4,5
 
@@ -462,8 +577,17 @@ public class SnakeGameEngine {
     }
 
     public static interface SnakeGameListener {
+        /**
+         * 地图版本变更
+         * @param changeData
+         * @param currentData
+         */
         public void versionChange(VersionData changeData, VersionData currentData);
+
+        /**
+         * 积分变更
+         * @param statistics 积分排行榜
+         */
+        public void statusChange(GameStatistics statistics);
     }
-
-
 }

@@ -13,14 +13,14 @@ import org.slf4j.LoggerFactory;
 /**
  * 处理TextWebSocketFrame
  */
-public class SnakeGameDataSynchHandler extends
+public class SnakeGameHandler extends
         SimpleChannelInboundHandler<TextWebSocketFrame> {
     static final Logger logger = LoggerFactory.getLogger(SnakeGameEngine.class);
 
     private final ChannelGroup channels;
     private final SnakeGameEngine gameEngine;
 
-    public SnakeGameDataSynchHandler(SnakeGameEngine gameEngine, ChannelGroup channels) {
+    public SnakeGameHandler(SnakeGameEngine gameEngine, ChannelGroup channels) {
         this.channels = channels;
         this.gameEngine = gameEngine;
     }
@@ -47,6 +47,7 @@ public class SnakeGameDataSynchHandler extends
             gameEngine.controlSnake(incoming.id().asShortText(), Integer.parseInt(cmdData));
         } else if (cmd.equals("FULL")) { // 全量刷新
             String fullData = JSON.toJSONString(gameEngine.getCurrentMapData(false));
+            fullData="version\r\n"+fullData;
             incoming.writeAndFlush(new TextWebSocketFrame(fullData));
         } else if (cmd.equals("QUANTITATIVE")) {// 定量更新
             String[] vTexts = cmdData.split(",");
@@ -57,7 +58,7 @@ public class SnakeGameDataSynchHandler extends
             }
 
             for (VersionData s : gameEngine.getVersion(versions)) {
-                incoming.writeAndFlush(new TextWebSocketFrame(JSON.toJSONString(s)));
+                incoming.writeAndFlush(new TextWebSocketFrame("version\r\n"+JSON.toJSONString(s)));
             }
         }
     }

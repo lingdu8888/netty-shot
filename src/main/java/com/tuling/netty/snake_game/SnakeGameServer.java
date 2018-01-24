@@ -29,7 +29,7 @@ public class SnakeGameServer {
 
     public SnakeGameServer(int port) {
         this.port = port;
-        gameEngine = new SnakeGameEngine(80, 80, 200);
+        gameEngine = new SnakeGameEngine(80, 80, 1000);
         channels = new DefaultChannelGroup(GlobalEventExecutor.INSTANCE);
     }
 
@@ -40,6 +40,11 @@ public class SnakeGameServer {
             @Override
             public void versionChange(VersionData changeData, VersionData currentData) {
                 sendVersionData(changeData);
+            }
+
+            @Override
+            public void statusChange(GameStatistics statistics) {
+                sendStatusData(statistics);
             }
         });
 
@@ -59,7 +64,7 @@ public class SnakeGameServer {
                             pipeline.addLast("http-chunked", new ChunkedWriteHandler());
                             pipeline.addLast("http-request", new HttpRequestHandler("/ws"));
                             pipeline.addLast("WebSocket-protocol", new WebSocketServerProtocolHandler("/ws"));
-                            pipeline.addLast("WebSocket-request", new SnakeGameDataSynchHandler(gameEngine, channels));
+                            pipeline.addLast("WebSocket-request", new SnakeGameHandler(gameEngine, channels));
                         }
                     })  //(4)
                     .option(ChannelOption.SO_BACKLOG, 128)          // (5)
@@ -81,20 +86,32 @@ public class SnakeGameServer {
         VersionData copy=new VersionData(); // 副本
         BeanUtils.copyProperties(data,copy);
         String str = JSON.toJSONString(data);
+        // 前缀
+        String prefix = "version\r\n";
         String[] cmds,cmdDatas;
         for (Channel channel : channels) {
             DrawingCommand cmd = gameEngine.getDrawingCommand(channel.id().asShortText());
             if (cmd != null) {
+                // 基于当前角色通道的 特殊作画指令
                 cmds = Arrays.copyOf(data.getCmds(), data.getCmds().length + 1);
                 cmds[cmds.length - 1] = cmd.getCmd();
                 cmdDatas = Arrays.copyOf(data.getCmdDatas(), data.getCmdDatas().length + 1);
                 cmdDatas[cmdDatas.length - 1] = cmd.getCmdData();
                 copy.setCmds(cmds);
                 copy.setCmdDatas(cmdDatas);
-                channel.writeAndFlush(new TextWebSocketFrame(JSON.toJSONString(copy)));
+                channel.writeAndFlush(new TextWebSocketFrame(prefix + JSON.toJSONString(copy)));
             } else {
                 channel.writeAndFlush(new TextWebSocketFrame(str));
             }
+        }
+    }
+
+    private void sendStatusData(GameStatistics statistics) {
+        String prefix = "status\r\n";
+        for (Channel channel : channels) {
+            IntegralInfo info = gameEngine.getIntegralInfoByAccountId(channel.id().asShortText());
+            statistics.setCurrent(info);
+            channel.writeAndFlush(new TextWebSocketFrame(prefix + JSON.toJSONString(statistics)));
         }
     }
 

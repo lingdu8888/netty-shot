@@ -18,9 +18,10 @@ public class SnakeEntity {
     private String gameName;
     private Direction direction;
     private ArrayList<Integer[]> bodys = new ArrayList<>();//y,x
-
     private ArrayList<Integer[]> addNodes = new ArrayList<>(); // 当前地图上添加的临时节点
     private ArrayList<Integer[]> removeNodes = new ArrayList<>();//当前地图上移除的临时节点
+    private int dieIntegral; //积分
+    private int killIntegral=0;// 击杀角色数
 
     public State state;
 
@@ -44,7 +45,11 @@ public class SnakeEntity {
         /**
          * 死亡
          */
-        die
+        die,
+        /*
+        *已离线
+        * */
+        offline;
     }
 
     public enum Direction {
@@ -78,10 +83,10 @@ public class SnakeEntity {
 
     // 上前前动一步
     public void moveStep() {
-
         addToHead();
         removeToTail();
     }
+
 
     public void removeToTail() {
         Integer[] node = bodys.remove(bodys.size() - 1);
@@ -118,7 +123,7 @@ public class SnakeEntity {
 
        /* bodys.add(0, newFirst);
         addNodes.add(newFirst);
-        engine.getMark(newFirst).snakeNodes++;*/
+        engine.getMark(newFirst).snakes++;*/
 
         add(0, newFirst);
     }
@@ -157,6 +162,11 @@ public class SnakeEntity {
         return state;
     }
 
+    // 增加击杀积分
+    public int addKillIntegral(){
+       return ++killIntegral;
+    }
+
     // 生长一节
     public void grow() {
         this.state = State.grow;
@@ -173,6 +183,7 @@ public class SnakeEntity {
             removeToTail();
         }
         this.state = State.die;
+        dieIntegral++; // 增加死亡积分
         logger.info("清除死亡角色 id:{} name:{}", accountId, gameName);
     }
 
@@ -217,6 +228,15 @@ public class SnakeEntity {
         }
         return bodys.get(0);
     }
+
+    public int getDieIntegral() {
+        return dieIntegral;
+    }
+
+    public int getKillIntegral() {
+        return killIntegral;
+    }
+
     @Override
     public String toString() {
         return "accountId='" + accountId + '\'' +

@@ -44,13 +44,13 @@ public class HttpRequestHandler extends SimpleChannelInboundHandler<FullHttpRequ
             RandomAccessFile file = new RandomAccessFile(INDEX, "r");//4
 
             HttpResponse response = new DefaultHttpResponse(request.getProtocolVersion(), HttpResponseStatus.OK);
-            response.headers().set(HttpHeaders.Names.CONTENT_TYPE, "text/html; charset=UTF-8");
+            response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/html; charset=UTF-8");
 
             boolean keepAlive = HttpHeaders.isKeepAlive(request);
 
             if (keepAlive) {                                        //5
-                response.headers().set(HttpHeaders.Names.CONTENT_LENGTH, file.length());
-                response.headers().set(HttpHeaders.Names.CONNECTION, HttpHeaders.Values.KEEP_ALIVE);
+                response.headers().set(HttpHeaderNames.CONTENT_LENGTH, file.length());
+                response.headers().set(HttpHeaderNames.CONNECTION, HttpHeaders.Values.KEEP_ALIVE);
             }
             ctx.write(response);                    //6
 

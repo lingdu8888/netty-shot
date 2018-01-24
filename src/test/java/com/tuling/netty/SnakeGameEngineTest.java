@@ -1,13 +1,12 @@
 package com.tuling.netty;
 
 import com.alibaba.fastjson.JSON;
-import com.tuling.netty.snake_game.SnakeEntity;
-import com.tuling.netty.snake_game.SnakeGameEngine;
-import com.tuling.netty.snake_game.VersionData;
+import com.tuling.netty.snake_game.*;
 import org.junit.Test;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Created by Tommy on 2018/1/9.
@@ -42,6 +41,13 @@ public class SnakeGameEngineTest {
                 // 输出变更版本
                 System.out.println("定量版本："+JSON.toJSONString(changeData));
             }
+
+            @Override
+            public void statusChange(GameStatistics statistics) {
+
+            }
+
+
         });
         while (true) {
             byte[] bytes = new byte[1024];
