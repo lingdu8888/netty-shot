@@ -37,6 +37,8 @@ public class SnakeGameEngine {
     private ArrayList<Food> foods = new ArrayList<>();
     private int footMaxSize = 10;
     private ScheduledFuture<?> stateFuture;
+    // 事件对列
+    private LinkedList<GameEvent> eventQueue = new LinkedList();
 
     public SnakeGameEngine() {
         mapWidth = 400;
@@ -65,19 +67,34 @@ public class SnakeGameEngine {
         }, refreshTime, refreshTime, TimeUnit.MILLISECONDS);
 
         // 状态信息更新
-       stateFuture= stateService.scheduleWithFixedDelay(new Runnable() {
+        stateFuture = stateService.scheduleWithFixedDelay(new Runnable() {
             @Override
             public void run() {
                 // 触发状态变更事件
                 fireStateChange();
+                fireNoticeEvent();
             }
         }, 1000, 1000, TimeUnit.MILLISECONDS);
     }
 
-    private void fireStateChange(){
+    private void fireNoticeEvent() {
+        if (listener == null)
+            return;
+        if (eventQueue.isEmpty())
+            return;
+        GameEvent[] events = eventQueue.toArray(new GameEvent[eventQueue.size()]);
+        listener.noticeEvent(events);
+        // TODO 可能为引发线程同步的问题
+        for (GameEvent event : events) {
+            eventQueue.remove(event);
+        }
+    }
+
+    private void fireStateChange() {
         if (listener != null) {
-            GameStatistics statistics=new GameStatistics();
+            GameStatistics statistics = new GameStatistics();
             statistics.setLastVersion(currentVersion);
+            // TODO 在线人数需除去离线角色
             statistics.setOnlineCount(snakes.size());
             statistics.setRankingList(getRankingList());
             listener.statusChange(statistics);
@@ -115,8 +132,14 @@ public class SnakeGameEngine {
                     break;
                 case dying:
                     snake.die();
+                    // 生成死亡事件并通知客户端
+                    GameEvent event = new GameEvent(GameEvent.EventType.die, "角色死亡");
+                    event.setAccountId(snake.getAccountId());
+                    eventQueue.addFirst(event);
                     break;
                 case die:   //角色已经死亡
+                    break;
+                case offline:   //角色已经离线
                     break;
             }
         }
@@ -129,6 +152,8 @@ public class SnakeGameEngine {
          * 执行触发的游戏规则
          */
         for (SnakeEntity snake : snakes.values()) {
+            if(snake.isOffline())
+                continue;
             //断定蛇头是否撞击边界
             if (!snake.isDie() && !isMapRange(snake.getHead())) {
                 snake.dying();
@@ -296,20 +321,29 @@ public class SnakeGameEngine {
         if (mapFuture != null && !mapFuture.isCancelled()) {
             mapFuture.cancel(false);
         }
-        if (stateFuture != null&&!stateFuture.isCancelled()) {
+        if (stateFuture != null && !stateFuture.isCancelled()) {
             stateFuture.cancel(false);
         }
     }
-
+    //TODO BUG 出生点位 可能已经被占用
     public SnakeEntity newSnake(String accountId, String accountName) {
-        int max = Math.min(mapWidth, mapHeight) - 30;
-        int min = 30;
+        int max = Math.min(mapWidth, mapHeight) - 10;
+        int min = 10;
         Random random = new Random();
         // 随机生成 出生点位
         int startPoint = random.nextInt(max - min + 1) + min;
         SnakeEntity node = new SnakeEntity(this, accountId, startPoint,
                 3, SnakeEntity.Direction.right);
-        node.setGameName(accountName);
+        String gameName=accountName;
+        // 防重名机制,补充accountId为后缀
+        for (SnakeEntity snakeEntity : snakes.values()) {
+            if(accountName.equals(snakeEntity.getGameName())){
+                gameName=gameName+"_"+accountId;
+                break;
+            }
+        }
+        node.setGameName(gameName);
+
         snakes.put(node.getAccountId(), node);
         this.logger.info("新增Snake ID:{} 出生点位:{} 初始节点:{}", accountId, startPoint, 3);
         return node;
@@ -317,11 +351,14 @@ public class SnakeGameEngine {
 
     public void controlSnake(String accountId, int controlCode) {
         if (!snakes.containsKey(accountId)) {
-            logger.warn("找不到指定帐户");
+//            logger.warn("找不到指定帐户");
             return;
         }
 
         SnakeEntity snake = snakes.get(accountId);
+        if(snake.isDie()){
+            return;
+        }
         switch (controlCode) {
             case 37:
                 snake.setDirection(SnakeEntity.Direction.left);
@@ -496,13 +533,14 @@ public class SnakeGameEngine {
 
     /**
      * 获取积分榜 前10位
+     *
      * @return
      */
     public List<IntegralInfo> getRankingList() {
-        List<IntegralInfo> result=new ArrayList<>(10);
+        List<IntegralInfo> result = new ArrayList<>(10);
         List<SnakeEntity> list = new ArrayList<>(snakes.size());
         list.addAll(snakes.values());
-         Collections.sort(list, new Comparator<SnakeEntity>() {
+        Collections.sort(list, new Comparator<SnakeEntity>() {
             @Override
             public int compare(SnakeEntity o1, SnakeEntity o2) {
                 return o1.getKillIntegral() - o2.getKillIntegral();
@@ -510,7 +548,7 @@ public class SnakeGameEngine {
         });
         IntegralInfo info;
         for (int i = 0; i < list.size() && i < 10; i++) {
-            info=new IntegralInfo();
+            info = new IntegralInfo();
             info.setLastVersion(currentVersion);
             info.setGameName(list.get(i).getGameName());
             info.setAccountId(list.get(i).getAccountId());
@@ -521,17 +559,17 @@ public class SnakeGameEngine {
         return result;
     }
 
-    public SnakeEntity getSnakeByAccountId(String accountId){
+    public SnakeEntity getSnakeByAccountId(String accountId) {
         if (!snakes.containsKey(accountId)) {
-            logger.warn("找不到指定帐户");
+//            logger.warn("找不到指定帐户");
             return null;
         }
         return snakes.get(accountId);
     }
 
-    public IntegralInfo getIntegralInfoByAccountId(String accountId){
+    public IntegralInfo getIntegralInfoByAccountId(String accountId) {
         if (!snakes.containsKey(accountId)) {
-            logger.warn("找不到指定帐户");
+//            logger.warn("找不到指定帐户");
             return null;
         }
         SnakeEntity snake = snakes.get(accountId);
@@ -545,7 +583,6 @@ public class SnakeGameEngine {
     }
 
 
-
     public void setListener(SnakeGameListener listener) {
         this.listener = listener;
     }
@@ -553,9 +590,27 @@ public class SnakeGameEngine {
     public Long getCurrentVersion() {
         return currentVersion;
     }
+    //TODO BUG 复活点位 可能已经被占用
+    public void doResurgence(String accountId) {
+        if(!snakes.containsKey(accountId)){
+            this.logger.warn("角色复活失败，找不到指定帐户 ID:{}", accountId);
+            return ;
+        }
+        if (!snakes.get(accountId).isDie()) {
+            this.logger.warn("角色复活失败，必须为死亡状态 ID:{}", accountId);
+            return;
+        }
+        int max = Math.min(mapWidth, mapHeight) - 10;
+        int min = 10;
+        Random random = new Random();
+        // 随机生成 出生点位
+        int startPoint = random.nextInt(max - min + 1) + min;
+        snakes.get(accountId).resurgence(startPoint,3);
+        this.logger.info("角色复活 ID:{} 出生点位:{} 初始节点:{}", accountId, startPoint, 3);
+    }
 
     // 地图标记位
-     static class Mark {
+    static class Mark {
         public int snakeNodes = 0;
         public int footNode = 0;//1,2,3,4,5
 
@@ -579,6 +634,7 @@ public class SnakeGameEngine {
     public static interface SnakeGameListener {
         /**
          * 地图版本变更
+         *
          * @param changeData
          * @param currentData
          */
@@ -586,8 +642,16 @@ public class SnakeGameEngine {
 
         /**
          * 积分变更
+         *
          * @param statistics 积分排行榜
          */
         public void statusChange(GameStatistics statistics);
+
+        /**
+         * 事件通知
+         *
+         * @param events 积分排行榜
+         */
+        public void noticeEvent(GameEvent[] events);
     }
 }

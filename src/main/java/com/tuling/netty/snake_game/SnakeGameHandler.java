@@ -60,6 +60,8 @@ public class SnakeGameHandler extends
             for (VersionData s : gameEngine.getVersion(versions)) {
                 incoming.writeAndFlush(new TextWebSocketFrame("version\r\n"+JSON.toJSONString(s)));
             }
+        } else if (cmd.equals("RESURGENCE")) { // 复活角色
+            gameEngine.doResurgence(incoming.id().asShortText());
         }
     }
 

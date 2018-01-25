@@ -47,6 +47,11 @@ public class SnakeGameEngineTest {
 
             }
 
+            @Override
+            public void noticeEvent(GameEvent[] events) {
+
+            }
+
 
         });
         while (true) {

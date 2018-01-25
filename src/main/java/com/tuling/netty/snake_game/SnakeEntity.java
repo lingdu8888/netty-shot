@@ -11,8 +11,8 @@ import java.util.ArrayList;
 public class SnakeEntity {
     static final Logger logger = LoggerFactory.getLogger(SnakeEntity.class);
 
-    private final int startPoint;
-    private final int initBodySzie;
+    private  int startPoint;
+    private  int initBodySzie;
     private final SnakeGameEngine engine;
     private String accountId;
     private String gameName;
@@ -65,7 +65,19 @@ public class SnakeEntity {
         this.initBodySzie = initBodySzie;
 
     }
-
+    /**
+     * 复活
+     * @param startPoint 复活点位
+     * @param initBodySzie 复活初始大小
+     */
+    public void resurgence(int startPoint,int initBodySzie) {
+        if (!isDie()) {
+            throw new RuntimeException("未达到复活条件,角色必须为死亡状态");
+        }
+        state = State.inactive;
+        this.startPoint = startPoint;
+        this.initBodySzie = initBodySzie;
+    }
     public void setDirection(Direction direction) {
         // 无效指令验证 .
         if (this.direction == Direction.up && direction == Direction.down)
@@ -192,6 +204,14 @@ public class SnakeEntity {
         logger.info("角色死亡 id:{} name:{}", accountId, gameName);
     }
 
+    public void offline(){
+        this.state=State.offline;
+        logger.info("角色掉线 id:{} name:{}", accountId, gameName);
+    }
+
+    public boolean isOffline() {
+        return this.state == State.offline;
+    }
 
     public boolean isDie() {
         return this.state == State.die;

@@ -29,7 +29,7 @@ public class SnakeGameServer {
 
     public SnakeGameServer(int port) {
         this.port = port;
-        gameEngine = new SnakeGameEngine(80, 80, 1000);
+        gameEngine = new SnakeGameEngine(60, 60, 500);
         channels = new DefaultChannelGroup(GlobalEventExecutor.INSTANCE);
     }
 
@@ -45,6 +45,11 @@ public class SnakeGameServer {
             @Override
             public void statusChange(GameStatistics statistics) {
                 sendStatusData(statistics);
+            }
+
+            @Override
+            public void noticeEvent(GameEvent[] events) {
+                sendEvent(events);
             }
         });
 
@@ -79,6 +84,18 @@ public class SnakeGameServer {
             workerGroup.shutdownGracefully();
             bossGroup.shutdownGracefully();
             System.out.println("SnakeGameServer 关闭了");
+        }
+    }
+
+    private void sendEvent(GameEvent[] events) {
+        String prefix = "event\r\n";
+        for (Channel channel : channels) {
+            for (GameEvent event : events) {
+                if (event.getAccountId() == null ||
+                        event.getAccountId().equals(channel.id().asShortText())) {
+                    channel.writeAndFlush(new TextWebSocketFrame(prefix+JSON.toJSONString(event)));
+                }
+            }
         }
     }
 
