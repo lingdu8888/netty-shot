@@ -8,10 +8,19 @@ import io.netty.channel.socket.ServerSocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.http.*;
+import io.netty.handler.codec.http.multipart.HttpPostRequestDecoder;
+import io.netty.handler.codec.http.multipart.InterfaceHttpData;
+import io.netty.handler.codec.http.websocketx.TextWebSocketFrame;
+import io.netty.handler.codec.http.websocketx.WebSocketServerProtocolHandler;
+import io.netty.handler.stream.ChunkedNioFile;
+import io.netty.handler.stream.ChunkedWriteHandler;
 import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.GenericFutureListener;
 
+import java.io.File;
+import java.io.RandomAccessFile;
 import java.net.ContentHandler;
+import java.util.List;
 import java.util.concurrent.ThreadFactory;
 
 /**
@@ -30,7 +39,14 @@ public class HttpSimpleServer {
                 ch.pipeline().addLast("http-decoder", new HttpRequestDecoder());
                 ch.pipeline().addLast("http-aggregator", new HttpObjectAggregator(65536));
                 ch.pipeline().addLast("http-encoder", new HttpResponseEncoder());
+                ch.pipeline().addLast("http-chunked",new ChunkedWriteHandler());
                 ch.pipeline().addLast("http-server", new HttpServerHandler());
+
+                ch.pipeline().addLast("WebSocket-protocol",
+                        new WebSocketServerProtocolHandler("/ws")); // 封装了编码和解码操作
+                ch.pipeline().addLast("WebSocket-handler",
+                        new WebSocketServerHandler());// 处理业务
+
             }
         });
         bootstrap.group(boss, work);
@@ -46,23 +62,32 @@ public class HttpSimpleServer {
         }
     }
 
-    private static class HttpServerHandler extends SimpleChannelInboundHandler {
+    private static class HttpServerHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
         @Override
-        protected void channelRead0(ChannelHandlerContext ctx, Object msg) throws Exception {
-            FullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK);
-            response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/html;charset=UTF-8");
-            String html = "<!DOCTYPE html>\n" +
-                    "<html lang=\"en\">\n" +
-                    "<head>\n" +
-                    "    <meta charset=\"UTF-8\">\n" +
-                    "    <title>hello word</title>\n" +
-                    "</head>\n" +
-                    "<body>\n" +
-                    "hello word\n" +
-                    "</body>\n" +
-                    "</html>";
-            response.content().writeBytes(html.getBytes("UTF-8"));
-            ctx.writeAndFlush(response).addListener(ChannelFutureListener.CLOSE);
+        protected void channelRead0(ChannelHandlerContext ctx, FullHttpRequest msg) throws Exception {
+            if ("/ws".equalsIgnoreCase(msg.uri())) {
+                ctx.fireChannelRead(msg.retain());
+                return;
+            }
+            File f=new File("E:\\git\\tuling-teach-netty\\src\\main\\resources\\HelloWord.html");
+            RandomAccessFile file = new RandomAccessFile(f, "r");//4
+            DefaultHttpResponse response = new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK);
+            response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/html; charset=UTF-8");
+            response.headers().set(HttpHeaderNames.CONTENT_LENGTH, file.length());
+//            response.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderNames.KEEP_ALIVE);
+            ctx.write(response);
+            ctx.write(new ChunkedNioFile(file.getChannel()));
+            ChannelFuture future = ctx.writeAndFlush(LastHttpContent.EMPTY_LAST_CONTENT);
+            future.addListener(ChannelFutureListener.CLOSE);
+            file.close();
+        }
+    }
+
+    private static class WebSocketServerHandler extends SimpleChannelInboundHandler<TextWebSocketFrame> {
+        @Override
+        protected void channelRead0(ChannelHandlerContext ctx, TextWebSocketFrame msg) throws Exception {
+            System.out.println("接收数据:"+msg.text());
+            ctx.writeAndFlush(new TextWebSocketFrame("hello word"));
         }
     }
 

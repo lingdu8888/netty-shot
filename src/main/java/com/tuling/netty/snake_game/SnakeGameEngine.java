@@ -623,7 +623,7 @@ public class SnakeGameEngine {
     private static class Food {
         // 当前位位置
         private Integer[] point;
-        private int type;
+        private int type;// 加速 、麻痹
 
         public Food(Integer[] point, int type) {
             this.point = point;
@@ -650,7 +650,7 @@ public class SnakeGameEngine {
         /**
          * 事件通知
          *
-         * @param events 积分排行榜
+         * @param events
          */
         public void noticeEvent(GameEvent[] events);
     }

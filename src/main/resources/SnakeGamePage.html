@@ -7,7 +7,7 @@
 <body>
 
 <canvas id="myCanvas" width="600" height="600" style="background: Black"></canvas>
-<div style="position: fixed;top:0px;left: 610px; width: 300px;height: 600px;">
+<div style="position: fixed;top:0px;left: 610px; width: 350px;height: 600px;">
     <ul>
         <li>
             <ul id="status_list">
@@ -46,7 +46,16 @@
     //判断当前浏览器是否支持WebSocket
     if ('WebSocket' in window) {
         websocket = new WebSocket("ws://" + host + "/ws");
-        accountName = prompt("请输入你的游戏名称:", "我的小可爱");
+        while (true) {
+            accountName = prompt("请输入你的游戏名称:", "");
+            if (accountName.length <= 5) {
+                break;
+            } else {
+                alert("名字太长了,必须在5个以内");
+            }
+        }
+
+
     } else {
         alert("当前浏览器不支持 WebSocket!");
     }
