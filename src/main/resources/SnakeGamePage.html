@@ -31,7 +31,9 @@
 
 <script type="text/javascript"
         src="http://ajax.aspnetcdn.com/ajax/jQuery/jquery-1.8.0.js"></script>
+<script src="https://cdn.bootcss.com/layer/3.0.3/layer.js"></script>
 <script type="text/javascript">
+
     // TODO 设置游戏状态
     // TODO 设置定时任务定时 检测版本
     // TODO 更新版本数据
@@ -47,7 +49,7 @@
     if ('WebSocket' in window) {
         websocket = new WebSocket("ws://" + host + "/ws");
         while (true) {
-            accountName = prompt("请输入你的游戏名称:", "");
+           accountName = prompt("请输入你的游戏名称:", "");
             if (accountName.length <= 5) {
                 break;
             } else {
@@ -140,7 +142,7 @@
     var lastVersion = 0;
     var lastTime = 0;
     // 数据对列
-    var dataQueues = new Array(30);
+    var dataQueues = new Array();
 
     function VersionData(full) {
         this.version;  // 版本号
@@ -152,6 +154,7 @@
     }
 
     // 定期对版本进行检测
+    // TODO  BUG弹窗时 定时器会变慢
     setInterval(versionUpdateCheck, 60);
 
     // 推送版本
@@ -188,6 +191,15 @@
         if (connectionState != "Connect") {// 未连接
             return;
         }
+           // 删除过期版本
+        if (dataQueues.length > 0) {
+            for (var i = dataQueues.length-1; i >= 0; i--) {
+                if (dataQueues[i].version <= lastVersion) {
+                    dataQueues.splice(i, 1);
+                }
+            }
+        }
+
 
         /**
          * 全量更新逻辑
@@ -210,7 +222,7 @@
          */
         // TODO 检测是否存在丢失版本，批量更新
         // TODO 丢失版本是否已超过10次，否则直接全量更新
-        // TODO 等待定量更新完成超时需要重新定量更新
+        // TODO 等待定量更新完成超时需要重新定量更新（一但定量版本不存在，导致永远定量更新问题）
         if (lastVersion != 0) {
             var nextVersionNumber = lastVersion + 1;
             var nextVersion = getVersion(nextVersionNumber);
@@ -220,7 +232,7 @@
             } else if (nextVersion == null && $.now() - lastTime > 500) { //下个版本获取超时 定量更新
                 nextVersion = new VersionData(false);
                 nextVersion.version = nextVersionNumber;
-                dataQueues.push(vd);
+                dataQueues.push(nextVersion);
                 websocket.send("QUANTITATIVE:" + (lastVersion + 1));
                 return;
             } else if (nextVersion != null && nextVersion.time == null) { // 等待定量更新完成
@@ -278,12 +290,15 @@
     function noticeEvent(data) {
         var eventData = $.parseJSON(data);
         if (eventData.type == "die") {
-            var v = prompt("哦哦挂掉了！输入'鲁班就是帅'复活:", "");
-            if (v == '鲁班就是帅') {
-                websocket.send("RESURGENCE:" + accountName);
-            } else {
-                alert("游戏结束!!");
-            }
+            layer.prompt({title: '随便写点啥，并确认', formType: 2}, function(text, index){
+                if (text == '鲁班就是帅') {
+                    websocket.send("RESURGENCE:" + accountName);
+                } else {
+                    layer.msg("游戏结束!!");
+                }
+                layer.close(index);
+            });
+
         }
     }
 
